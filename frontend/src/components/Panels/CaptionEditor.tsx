@@ -1,247 +1,128 @@
-import { useState, useEffect } from 'react';
-import { useEditorStore } from '../../store/editorStore';
-import { Button } from '../UI/Button';
-import type { Clip } from '../../types';
+import { useMemo } from "react";
+import { useEditorStore } from "../../store/editorStore";
+import type { Clip } from "../../types";
 
-interface CaptionEditorProps {
-  clipId: string;
-}
+export default function CaptionEditor() {
+  const { tracks, selection, updateClip } = useEditorStore((s) => ({
+    tracks: s.tracks,
+    selection: s.selection,
+    updateClip: s.updateClip,
+  }));
 
-export function CaptionEditor({ clipId }: CaptionEditorProps) {
-  const tracks = useEditorStore((state) => state.tracks);
-  const updateCaption = useEditorStore((state) => state.updateCaption);
+  const clip = useMemo<Clip | undefined>(
+    () => {
+      const allClips = tracks.flatMap(t => t.clips);
+      return allClips.find((c) => c.id === selection?.[0] && c.type === "caption");
+    },
+    [tracks, selection]
+  );
 
-  const clip = tracks
-    .flatMap((track) => track.clips)
-    .find((c) => c.id === clipId && c.type === 'caption');
-
-  const [text, setText] = useState(clip?.text || '');
-  const [x, setX] = useState(clip?.x ?? 50); // Default center (percentage)
-  const [y, setY] = useState(clip?.y ?? 50);
-  const [fontSize, setFontSize] = useState(clip?.fontSize ?? 24);
-  const [align, setAlign] = useState<Clip['align']>(clip?.align || 'center');
-  const [color, setColor] = useState(clip?.color || '#ffffff');
-  const [bg, setBg] = useState(clip?.bg || 'transparent');
-  const [opacity, setOpacity] = useState(clip?.opacity ?? 1);
-  const [fadeInMs, setFadeInMs] = useState(clip?.fadeInMs ?? 0);
-  const [fadeOutMs, setFadeOutMs] = useState(clip?.fadeOutMs ?? 0);
-
-  // Update local state when clip changes
-  useEffect(() => {
-    if (clip) {
-      setText(clip.text || '');
-      setX(clip.x ?? 50);
-      setY(clip.y ?? 50);
-      setFontSize(clip.fontSize ?? 24);
-      setAlign(clip.align || 'center');
-      setColor(clip.color || '#ffffff');
-      setBg(clip.bg || 'transparent');
-      setOpacity(clip.opacity ?? 1);
-      setFadeInMs(clip.fadeInMs ?? 0);
-      setFadeOutMs(clip.fadeOutMs ?? 0);
-    }
-  }, [clip]);
-
-  if (!clip) {
+  if (!clip || clip.type !== "caption") {
     return (
-      <div className="h-full flex items-center justify-center text-gray-400">
-        <p>No caption selected</p>
+      <div className="p-3 text-sm text-neutral-500">
+        Select a caption clip to edit its properties.
       </div>
     );
   }
 
-  const handleApply = () => {
-    updateCaption(clipId, {
-      text,
-      x,
-      y,
-      fontSize,
-      align,
-      color,
-      bg,
-      opacity,
-      fadeInMs,
-      fadeOutMs,
-    });
+  const onNum = (k: keyof Clip) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    updateClip(clip.id, { [k]: Number(e.target.value) } as Partial<Clip>);
+
+  const onText = (k: keyof Clip) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    updateClip(clip.id, { [k]: e.target.value } as Partial<Clip>);
+
+  const onRange01 = (k: keyof Clip) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    updateClip(clip.id, { [k]: Math.max(0, Math.min(1, Number(e.target.value))) } as Partial<Clip>);
+
+  const onColor = (k: keyof Clip) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    updateClip(clip.id, { [k]: e.target.value } as Partial<Clip>);
+
+  const onSelect = (k: keyof Clip) => (e: React.ChangeEvent<HTMLSelectElement>) =>
+    updateClip(clip.id, { [k]: e.target.value } as Partial<Clip>);
+
+  const defaults: Required<Pick<Clip, "text"|"x"|"y"|"fontSize"|"align"|"color"|"bg"|"opacity"|"fadeInMs"|"fadeOutMs">> = {
+    text: "",
+    x: 0.5,
+    y: 0.8,
+    fontSize: 48,
+    align: "center",
+    color: "#ffffff",
+    bg: "rgba(0,0,0,0.4)",
+    opacity: 1,
+    fadeInMs: 150,
+    fadeOutMs: 150,
   };
 
+  const v = { ...defaults, ...clip };
+
   return (
-    <div className="h-full flex flex-col bg-gray-900 border-r border-gray-700 overflow-y-auto">
-      <div className="p-4 border-b border-gray-700">
-        <h2 className="text-lg font-semibold text-white">Caption Editor</h2>
+    <div className="space-y-3 p-3 bg-gray-900">
+      <div>
+        <label className="block text-xs mb-1 text-gray-300">Text</label>
+        <textarea
+          className="w-full rounded border border-gray-700 bg-gray-800 text-white p-2 text-sm"
+          rows={3}
+          value={v.text}
+          onChange={onText("text")}
+          placeholder="Enter caption text…"
+        />
       </div>
 
-      <div className="flex-1 p-4 space-y-4">
-        {/* Text */}
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            Text
-          </label>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Enter caption text..."
-            className="w-full p-3 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            rows={3}
-          />
+          <label className="block text-xs mb-1 text-gray-300">X (0–1)</label>
+          <input type="number" step="0.01" min={0} max={1} className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1"
+            value={v.x} onChange={onRange01("x")} />
         </div>
-
-        {/* Position */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              X Position (%)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={x}
-              onChange={(e) => setX(parseFloat(e.target.value))}
-              className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Y Position (%)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={y}
-              onChange={(e) => setY(parseFloat(e.target.value))}
-              className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Font Size */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            Font Size (px)
-          </label>
-          <input
-            type="number"
-            min="8"
-            max="200"
-            value={fontSize}
-            onChange={(e) => setFontSize(parseInt(e.target.value, 10))}
-            className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <label className="block text-xs mb-1 text-gray-300">Y (0–1)</label>
+          <input type="number" step="0.01" min={0} max={1} className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1"
+            value={v.y} onChange={onRange01("y")} />
         </div>
+      </div>
 
-        {/* Alignment */}
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            Alignment
-          </label>
-          <select
-            value={align}
-            onChange={(e) => setAlign(e.target.value as Clip['align'])}
-            className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
+          <label className="block text-xs mb-1 text-gray-300">Font Size (px)</label>
+          <input type="number" min={8} max={200} className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1"
+            value={v.fontSize} onChange={onNum("fontSize")} />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 text-gray-300">Align</label>
+          <select className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1" value={v.align} onChange={onSelect("align")}>
+            <option>left</option><option>center</option><option>right</option>
           </select>
         </div>
+      </div>
 
-        {/* Colors */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Text Color
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="flex-1 p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="#ffffff"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Background
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="color"
-                value={bg === 'transparent' ? '#000000' : bg}
-                onChange={(e) => setBg(e.target.value)}
-                className="w-12 h-10 rounded border border-gray-700 cursor-pointer"
-              />
-              <input
-                type="text"
-                value={bg}
-                onChange={(e) => setBg(e.target.value)}
-                className="flex-1 p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="transparent or #000000"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Opacity */}
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">
-            Opacity: {Math.round(opacity * 100)}%
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={opacity}
-            onChange={(e) => setOpacity(parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-          />
+          <label className="block text-xs mb-1 text-gray-300">Text Color</label>
+          <input type="color" value={v.color} onChange={onColor("color")} className="w-full h-8 p-0 border border-gray-700 rounded" />
         </div>
-
-        {/* Fade In/Out */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Fade In (ms)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="5000"
-              step="100"
-              value={fadeInMs}
-              onChange={(e) => setFadeInMs(parseInt(e.target.value, 10))}
-              className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Fade Out (ms)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="5000"
-              step="100"
-              value={fadeOutMs}
-              onChange={(e) => setFadeOutMs(parseInt(e.target.value, 10))}
-              className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+        <div>
+          <label className="block text-xs mb-1 text-gray-300">BG (optional)</label>
+          <input type="text" className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1"
+            value={v.bg ?? ""} onChange={onText("bg")} placeholder="e.g. rgba(0,0,0,0.4) or empty" />
         </div>
+      </div>
 
-        <Button onClick={handleApply} className="w-full">
-          Apply Changes
-        </Button>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs mb-1 text-gray-300">Opacity (0–1)</label>
+          <input type="number" step="0.05" min={0} max={1} className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1"
+            value={v.opacity} onChange={onRange01("opacity")} />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 text-gray-300">Fade In (ms)</label>
+          <input type="number" min={0} max={2000} className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1"
+            value={v.fadeInMs} onChange={onNum("fadeInMs")} />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 text-gray-300">Fade Out (ms)</label>
+          <input type="number" min={0} max={2000} className="w-full border border-gray-700 bg-gray-800 text-white rounded p-1"
+            value={v.fadeOutMs} onChange={onNum("fadeOutMs")} />
+        </div>
       </div>
     </div>
   );

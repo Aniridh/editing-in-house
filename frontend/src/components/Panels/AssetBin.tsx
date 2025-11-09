@@ -49,14 +49,15 @@ export function AssetBin() {
     const captionClip = {
       id: `caption-${Date.now()}`,
       trackId: overlayTrack.id,
+      track: 'overlay' as const,
       start: playhead,
       end: playhead + 2, // Default 2 seconds
       inPoint: 0,
       outPoint: 2,
       type: 'caption' as const,
       text: 'New Caption',
-      x: 50,
-      y: 50,
+      x: 0.5,
+      y: 0.8,
       fontSize: 24,
       align: 'center' as const,
       color: '#ffffff',

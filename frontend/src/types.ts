@@ -130,26 +130,31 @@ export interface Asset {
   createdAt: number;
 }
 
+export type ClipType = "video" | "image" | "audio" | "caption";
+
 export interface Clip {
   id: string;
   assetId?: string; // Optional for caption clips
-  trackId: string;
+  type: ClipType;
+  trackId: string; // Keep for backward compatibility
+  track?: "video" | "audio" | "overlay"; // New normalized track property
   start: number; // timeline position in seconds
   end: number; // timeline position in seconds
-  inPoint: number; // start time within asset (seconds)
-  outPoint: number; // end time within asset (seconds)
-  // Caption/overlay properties (only for caption clips)
-  type?: 'caption';
+  inPoint: number; // start time within asset (seconds) - keep for backward compatibility
+  outPoint: number; // end time within asset (seconds) - keep for backward compatibility
+  in?: number; // New normalized property
+  out?: number; // New normalized property
+  // Caption/overlay properties (used when type === "caption")
   text?: string;
-  x?: number; // position in pixels or percentage
-  y?: number;
-  fontSize?: number;
-  align?: 'left' | 'center' | 'right';
-  color?: string;
-  bg?: string; // background color
-  opacity?: number; // 0-1
-  fadeInMs?: number;
-  fadeOutMs?: number;
+  x?: number; // 0..1 normalized (relative to preview width)
+  y?: number; // 0..1 normalized (relative to preview height)
+  fontSize?: number; // px
+  align?: "left" | "center" | "right";
+  color?: string; // css color
+  bg?: string | null; // css color or null
+  opacity?: number; // 0..1
+  fadeInMs?: number; // 0..2000
+  fadeOutMs?: number; // 0..2000
   // Transition properties
   transitionType?: 'crossfade';
   transitionDuration?: number; // in seconds (0.25-1.5)

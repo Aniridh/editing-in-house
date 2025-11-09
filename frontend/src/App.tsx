@@ -3,7 +3,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { CommandPanel } from './components/Panels/CommandPanel';
 import { GeneratorPanel } from './components/Panels/GeneratorPanel';
 import { AssetBin } from './components/Panels/AssetBin';
-import { CaptionEditor } from './components/Panels/CaptionEditor';
+import CaptionEditor from './components/Panels/CaptionEditor';
 import { Preview } from './components/Editor/Preview';
 import { Timeline } from './components/Editor/Timeline';
 import { StatusBar } from './components/StatusBar';
@@ -23,7 +23,7 @@ function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [demoMode, setDemoMode] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportSettings, setExportSettings] = useState<ExportSettings | null>(null);
+  const [exportSettings] = useState<ExportSettings | null>(null);
   const selection = useEditorStore((state) => state.selection);
   const tracks = useEditorStore((state) => state.tracks);
 
@@ -38,8 +38,8 @@ function App() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
-  const { exportWebM, isExporting, progress, downloadBlob } = useExport(videoRef, previewContainerRef);
-  const { saveProject, loadProject, loadFromLocalStorage } = useProjectSaveLoad();
+  const { isExporting, progress } = useExport(videoRef, previewContainerRef);
+  const { saveProject, loadProject } = useProjectSaveLoad();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const commandPalette = useCommandPalette();
   const [showHelp, setShowHelp] = useState(false);
@@ -57,26 +57,7 @@ function App() {
     setShowExportModal(true);
   };
 
-  const handleExportConfirm = async (settings: ExportSettings) => {
-    setExportSettings(settings);
-    setShowExportModal(false);
-    
-    try {
-      addToast(`Starting export at ${settings.fps}fps ${settings.resolution}...`, 'info');
-      const blob = await exportWebM(settings);
-      if (blob) {
-        downloadBlob(blob, `export-${settings.fps}fps-${settings.resolution}.webm`);
-        addToast('Export complete!', 'success');
-      } else {
-        addToast('Export failed', 'error');
-      }
-    } catch (error) {
-      console.error('Export error:', error);
-      addToast('Export failed', 'error');
-    } finally {
-      setExportSettings(null);
-    }
-  };
+  // Export is now handled directly in ExportSettingsModal
 
   const handleSaveProject = () => {
     try {
@@ -205,11 +186,11 @@ function App() {
               <GeneratorPanel />
             </div>
             <div className="h-80 border-t border-gray-700 overflow-hidden">
-              <AssetBin />
+        <AssetBin />
             </div>
             {selectedCaptionClip && (
               <div className="h-96 border-t border-gray-700 overflow-hidden">
-                <CaptionEditor clipId={selectedCaptionClip.id} />
+                <CaptionEditor />
               </div>
             )}
           </div>
@@ -227,6 +208,7 @@ function App() {
 
         {/* Status bar */}
         <StatusBar />
+      </div>
 
         {/* Toasts */}
         <ToastContainer toasts={toasts} onDismiss={removeToast} />
@@ -235,7 +217,8 @@ function App() {
         <ExportSettingsModal
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
-          onConfirm={handleExportConfirm}
+          captureRef={previewContainerRef}
+          videoRef={videoRef}
           defaultSettings={exportSettings || undefined}
         />
 
@@ -251,7 +234,7 @@ function App() {
           onClose={() => setShowHelp(false)}
         />
       </ErrorBoundary>
-    );
-  }
+  );
+}
 
 export default App;

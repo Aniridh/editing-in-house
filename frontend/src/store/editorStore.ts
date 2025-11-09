@@ -35,7 +35,9 @@ interface EditorStore extends EditorState {
   setSelection: (clipIds: string[]) => void;
   clearSelection: () => void;
   setAspectRatio: (aspectRatio: string) => void;
-  // Caption operations
+  // Clip operations
+  updateClip: (id: string, patch: Partial<Clip>) => void;
+  // Caption operations (kept for backward compatibility)
   updateCaption: (clipId: string, captionProps: Partial<Pick<Clip, 'text' | 'x' | 'y' | 'fontSize' | 'align' | 'color' | 'bg' | 'opacity' | 'fadeInMs' | 'fadeOutMs'>>) => void;
   // Transition operations
   setTransition: (fromClipId: string, toClipId: string, duration: number) => void;
@@ -470,6 +472,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setAspectRatio: (aspectRatio) => {
     set({ aspectRatio });
+  },
+
+  updateClip: (id: string, patch: Partial<Clip>) => {
+    set((state) => {
+      const newTracks = state.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      }));
+      const newState = { ...state, tracks: newTracks };
+      history.save(newState);
+      return { tracks: newTracks };
+    });
   },
 
   updateCaption: (clipId, captionProps) => {

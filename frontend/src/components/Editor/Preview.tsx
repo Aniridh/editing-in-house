@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../../store/editorStore';
 import { formatTime } from '../../utils/timeline';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
+import type { Clip } from '../../types';
 
 interface PreviewProps {
-  videoRef?: React.RefObject<HTMLVideoElement>;
-  containerRef?: React.RefObject<HTMLDivElement>;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export function Preview({ videoRef: externalRef, containerRef: externalContainerRef }: PreviewProps) {
@@ -44,7 +45,7 @@ export function Preview({ videoRef: externalRef, containerRef: externalContainer
   // Determine which clips to show and their opacities
   let primaryClip = activeClips[0];
   let primaryOpacity = 1;
-  let secondaryClip: typeof primaryClip = null;
+  let secondaryClip: Clip | null = null;
   let secondaryOpacity = 0;
 
   if (transitionClip && transitionToClip) {
@@ -90,7 +91,7 @@ export function Preview({ videoRef: externalRef, containerRef: externalContainer
     assets,
     playhead,
     isPlaying,
-    fadeDuration: 20, // 20ms fade at boundaries
+    masterGain: 1,
   });
 
   // Sync playhead with video element
@@ -159,7 +160,6 @@ export function Preview({ videoRef: externalRef, containerRef: externalContainer
     setCurrentTime(time);
     
     if (primaryClip) {
-      const assetTime = primaryClip.inPoint + (time - primaryClip.inPoint);
       const timelineTime = primaryClip.start + (time - primaryClip.inPoint);
       setPlayhead(timelineTime);
     }
@@ -226,60 +226,46 @@ export function Preview({ videoRef: externalRef, containerRef: externalContainer
             )}
             {/* Caption Overlay Layer */}
             <div className="absolute inset-0 pointer-events-none">
-              {activeCaptions.map((caption) => {
-                const clipStart = caption.start;
-                const clipEnd = caption.end;
-                const clipDuration = clipEnd - clipStart;
-                const relativeTime = playhead - clipStart;
+              {activeCaptions.map((c) => {
+                const t = (playhead - c.start) * 1000; // ms since clip start
+                const fadeIn = c.fadeInMs ?? 0;
+                const fadeOut = c.fadeOutMs ?? 0;
+                const totalMs = (c.end - c.start) * 1000;
+                const inAlpha = fadeIn ? Math.min(1, t / fadeIn) : 1;
+                const outAlpha = fadeOut ? Math.min(1, (totalMs - t) / fadeOut) : 1;
+                const alpha = (c.opacity ?? 1) * Math.min(inAlpha, outAlpha);
 
-                // Calculate opacity with fade in/out
-                let opacity = caption.opacity ?? 1;
-                const fadeInMs = caption.fadeInMs ?? 0;
-                const fadeOutMs = caption.fadeOutMs ?? 0;
-                const fadeInProgress = fadeInMs > 0 ? Math.min(1, (relativeTime * 1000) / fadeInMs) : 1;
-                const fadeOutProgress = fadeOutMs > 0 ? Math.min(1, ((clipDuration - relativeTime) * 1000) / fadeOutMs) : 1;
-                opacity = opacity * fadeInProgress * fadeOutProgress;
+                // Get container dimensions for normalized positioning
+                const container = previewContainerRef.current;
+                const previewWidth = container?.clientWidth || 1920;
+                const previewHeight = container?.clientHeight || 1080;
 
-                // Position (percentage-based)
-                const x = caption.x ?? 50;
-                const y = caption.y ?? 50;
+                const left = (c.x ?? 0.5) * previewWidth;
+                const top = (c.y ?? 0.8) * previewHeight;
 
-                // Alignment
-                const textAlign = caption.align || 'center';
-                let left = `${x}%`;
-                let transform = 'translate(-50%, -50%)';
-                if (textAlign === 'left') {
-                  transform = 'translate(0, -50%)';
-                } else if (textAlign === 'right') {
-                  transform = 'translate(-100%, -50%)';
-                }
+                const align = c.align ?? "center";
+                const transform = align === "center" ? "translate(-50%, -50%)"
+                                : align === "right" ? "translate(-100%, -50%)" : "translate(0, -50%)";
 
                 return (
                   <div
-                    key={caption.id}
-                    className="absolute"
+                    key={c.id}
                     style={{
-                      left: left,
-                      top: `${y}%`,
-                      transform: transform,
-                      opacity: opacity,
-                      transition: 'opacity 0.1s linear',
+                      position: "absolute",
+                      left, top,
+                      transform,
+                      color: c.color ?? "#fff",
+                      fontSize: (c.fontSize ?? 48) + "px",
+                      opacity: alpha,
+                      padding: c.bg ? "4px 8px" : undefined,
+                      background: c.bg ?? undefined,
+                      borderRadius: 8,
+                      pointerEvents: "none",
+                      whiteSpace: "pre-wrap",
+                      textAlign: align as any,
                     }}
                   >
-                    <div
-                      style={{
-                        fontSize: `${caption.fontSize ?? 24}px`,
-                        color: caption.color || '#ffffff',
-                        backgroundColor: caption.bg === 'transparent' ? 'transparent' : caption.bg || 'transparent',
-                        textAlign: textAlign,
-                        padding: caption.bg && caption.bg !== 'transparent' ? '4px 8px' : '0',
-                        borderRadius: '4px',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {caption.text || ''}
-                    </div>
+                    {c.text}
                   </div>
                 );
               })}

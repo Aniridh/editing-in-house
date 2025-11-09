@@ -9,8 +9,8 @@ const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
 };
 
 export function useExport(
-  videoRef?: React.RefObject<HTMLVideoElement>,
-  containerRef?: React.RefObject<HTMLDivElement>
+  videoRef?: React.RefObject<HTMLVideoElement | null>,
+  containerRef?: React.RefObject<HTMLDivElement | null>
 ) {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
