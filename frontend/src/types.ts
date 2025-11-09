@@ -1,171 +1,60 @@
-// Backend-compatible types
-export type JobStatus = 'queued' | 'generating' | 'complete' | 'error';
+export type EditorActionType =
+  | "generate_clip" | "generate_image" | "generate_voiceover"
+  | "insert" | "move" | "trim" | "split" | "delete"
+  | "set_aspect" | "set_caption" | "set_music" | "render";
 
-export interface Job {
-  id: string;
-  status: JobStatus;
-  progress: number; // 0-100
-  url?: string;
-  error?: string;
-  createdAt: number;
-  updatedAt: number;
+export interface EditorAction {
+  action: EditorActionType;
+  params?: Record<string, any>;
 }
-
-// Action types matching backend
-export interface GenerateClipAction {
-  type: 'generate_clip';
-  prompt: string;
-  duration_sec?: number;
-  aspect?: string;
-  style?: string;
-}
-
-export interface GenerateImageAction {
-  type: 'generate_image';
-  prompt: string;
-  aspect?: string;
-  style?: string;
-}
-
-export interface GenerateVoiceoverAction {
-  type: 'generate_voiceover';
-  text: string;
-  voice?: string;
-}
-
-export interface InsertAction {
-  type: 'insert';
-  asset_id: string;
-  track: 'video' | 'overlay' | 'audio';
-  at: number;
-}
-
-export interface TrimAction {
-  type: 'trim';
-  clip_id: string;
-  start: number;
-  end: number;
-}
-
-export interface SplitAction {
-  type: 'split';
-  clip_id: string;
-  at: number;
-}
-
-export interface MoveAction {
-  type: 'move';
-  clip_id: string;
-  to: number;
-}
-
-export interface DeleteAction {
-  type: 'delete';
-  clip_id: string;
-}
-
-export interface SetAspectAction {
-  type: 'set_aspect';
-  aspect: string;
-}
-
-export interface SetCaptionAction {
-  type: 'set_caption';
-  text: string;
-  start: number;
-  end: number;
-  track?: 'overlay';
-}
-
-export interface SetMusicAction {
-  type: 'set_music';
-  url?: string;
-  volume?: number;
-}
-
-export interface RenderAction {
-  type: 'render';
-  format?: string;
-}
-
-export type Action =
-  | GenerateClipAction
-  | GenerateImageAction
-  | GenerateVoiceoverAction
-  | InsertAction
-  | TrimAction
-  | SplitAction
-  | MoveAction
-  | DeleteAction
-  | SetAspectAction
-  | SetCaptionAction
-  | SetMusicAction
-  | RenderAction;
 
 export interface InterpretResponse {
-  actions: Action[];
+  actions: EditorAction[];
 }
 
-export interface GenerateResponse {
-  jobId?: string;
-  url?: string;
-}
-
-// Frontend-specific types
-export type AssetType = 'video' | 'image' | 'audio' | 'voiceover';
+export type AssetKind = "video" | "image" | "audio";
 
 export interface Asset {
   id: string;
+  kind: AssetKind;
   url: string;
-  type: AssetType;
-  duration?: number; // in seconds
-  metadata?: {
-    width?: number;
-    height?: number;
-    aspectRatio?: string;
-    thumbnails?: string[]; // Array of data URLs for video thumbnails
-    waveform?: number[]; // Array of normalized amplitude values (0-1) for audio waveform
-    [key: string]: unknown;
-  };
-  createdAt: number;
+  thumb?: string;
+  meta?: any;
 }
 
 export type ClipType = "video" | "image" | "audio" | "caption";
 
 export interface Clip {
   id: string;
-  assetId?: string; // Optional for caption clips
+  assetId?: string;
   type: ClipType;
-  trackId: string; // Keep for backward compatibility
-  track?: "video" | "audio" | "overlay"; // New normalized track property
-  start: number; // timeline position in seconds
-  end: number; // timeline position in seconds
-  inPoint: number; // start time within asset (seconds) - keep for backward compatibility
-  outPoint: number; // end time within asset (seconds) - keep for backward compatibility
-  in?: number; // New normalized property
-  out?: number; // New normalized property
-  // Caption/overlay properties (used when type === "caption")
+  track: "video" | "audio" | "overlay";
+  start: number;
+  end: number;
+  in?: number;
+  out?: number;
+  volume_db?: number;
+  /* caption fields */
   text?: string;
-  x?: number; // 0..1 normalized (relative to preview width)
-  y?: number; // 0..1 normalized (relative to preview height)
-  fontSize?: number; // px
+  x?: number;
+  y?: number;
+  fontSize?: number;
   align?: "left" | "center" | "right";
-  color?: string; // css color
-  bg?: string | null; // css color or null
-  opacity?: number; // 0..1
-  fadeInMs?: number; // 0..2000
-  fadeOutMs?: number; // 0..2000
-  // Transition properties
-  transitionType?: 'crossfade';
-  transitionDuration?: number; // in seconds (0.25-1.5)
-  transitionToClipId?: string; // ID of clip this transitions to
+  color?: string;
+  bg?: string | null;
+  opacity?: number;
+  fadeInMs?: number;
+  fadeOutMs?: number;
 }
 
-export interface Track {
+export type JobStatus = "queued" | "generating" | "complete" | "error";
+
+export interface Job {
   id: string;
-  type: 'video' | 'audio' | 'overlay';
-  clips: Clip[];
-  locked?: boolean;
-  muted?: boolean;
+  kind: "video" | "image" | "voice";
+  status: JobStatus;
+  progress?: number;
+  url?: string;
+  error?: string;
 }
 

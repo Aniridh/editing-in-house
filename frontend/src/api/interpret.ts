@@ -1,16 +1,10 @@
-import { apiPost } from './client';
-import type { InterpretResponse, Action } from '../types';
+import { json } from "./client";
+import type { InterpretResponse } from "../types";
 
-export async function interpretCommand(
-  prompt: string,
-  demoMode: boolean
-): Promise<Action[]> {
-  if (demoMode) {
-    // In demo mode, use mock API
-    const { mockInterpret } = await import('./mockApi');
-    return mockInterpret(prompt);
-  }
-
-  const response = await apiPost<InterpretResponse>('/api/interpret', { prompt });
-  return response.actions;
+export async function interpret(text: string): Promise<InterpretResponse> {
+  return json<InterpretResponse>("/api/interpret", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
 }
+

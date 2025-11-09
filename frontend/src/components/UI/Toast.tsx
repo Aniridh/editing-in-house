@@ -1,66 +1,28 @@
-import { useEffect } from 'react';
-
-export type ToastType = 'success' | 'error' | 'info' | 'warning';
-
-export interface Toast {
-  id: string;
-  message: string;
-  type: ToastType;
-}
+import React, { useEffect } from "react";
 
 interface ToastProps {
-  toast: Toast;
-  onDismiss: (id: string) => void;
+  message: string;
+  type?: "success" | "error" | "info";
+  onDismiss: () => void;
+  duration?: number;
 }
 
-export function Toast({ toast, onDismiss }: ToastProps) {
+export function Toast({ message, type = "info", onDismiss, duration = 3000 }: ToastProps) {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onDismiss(toast.id);
-    }, 5000);
-
+    const timer = setTimeout(onDismiss, duration);
     return () => clearTimeout(timer);
-  }, [toast.id, onDismiss]);
-
-  const typeClasses = {
-    success: 'bg-green-600 text-white',
-    error: 'bg-red-600 text-white',
-    info: 'bg-blue-600 text-white',
-    warning: 'bg-yellow-600 text-white',
-  };
+  }, [onDismiss, duration]);
 
   return (
     <div
-      className={`${typeClasses[toast.type]} px-4 py-3 rounded-lg shadow-lg flex items-center justify-between min-w-[300px] max-w-md`}
-      role="alert"
+      className={`
+        px-4 py-2 rounded-lg text-sm shadow-lg
+        ${type === "success" ? "bg-green-600 text-white" : ""}
+        ${type === "error" ? "bg-red-600 text-white" : ""}
+        ${type === "info" ? "bg-[var(--panel)] text-zinc-200 border border-[var(--border)]" : ""}
+      `}
     >
-      <span>{toast.message}</span>
-      <button
-        onClick={() => onDismiss(toast.id)}
-        className="ml-4 text-white hover:text-gray-200 focus:outline-none"
-        aria-label="Dismiss"
-      >
-        ×
-      </button>
-    </div>
-  );
-}
-
-interface ToastContainerProps {
-  toasts: Toast[];
-  onDismiss: (id: string) => void;
-}
-
-export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
-  return (
-    <div
-      className="fixed top-4 right-4 z-50 flex flex-col gap-2"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      {toasts.map((toast) => (
-        <Toast key={toast.id} toast={toast} onDismiss={onDismiss} />
-      ))}
+      {message}
     </div>
   );
 }

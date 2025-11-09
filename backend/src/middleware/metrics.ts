@@ -29,8 +29,8 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
   const durationTimer = httpRequestDuration.startTimer({ route, method });
 
   // Override res.end to capture status code
-  const originalEnd = res.end;
-  res.end = function (chunk?: any, encoding?: any) {
+  const originalEnd = res.end.bind(res);
+  res.end = function (chunk?: any, encoding?: any, callback?: any): Response {
     const duration = (Date.now() - startTime) / 1000; // Convert to seconds
     durationTimer();
 
@@ -38,9 +38,18 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
     const status = res.statusCode.toString();
     httpRequestsTotal.inc({ route, status });
 
-    // Call original end
-    originalEnd.call(this, chunk, encoding);
-  };
+    // Handle different overload signatures
+    if (typeof encoding === 'function') {
+      return originalEnd(chunk, encoding);
+    }
+    if (typeof callback === 'function') {
+      return originalEnd(chunk, encoding, callback);
+    }
+    if (chunk !== undefined) {
+      return originalEnd(chunk, encoding);
+    }
+    return originalEnd();
+  } as typeof res.end;
 
   next();
 }

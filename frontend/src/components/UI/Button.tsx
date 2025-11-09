@@ -1,36 +1,26 @@
-import { ButtonHTMLAttributes, ReactNode } from 'react';
+import React from "react";
+import { clsx } from "clsx";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger';
-  children: ReactNode;
-  as?: 'span' | 'button';
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary";
+  children: React.ReactNode;
+  as?: "button" | "span";
 }
 
-export function Button({ variant = 'primary', className = '', children, as: Component = 'button', ...props }: ButtonProps) {
-  const baseClasses = 'px-4 py-2 rounded font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
-  
-  const variantClasses = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500',
-    secondary: 'bg-gray-600 hover:bg-gray-700 text-white focus:ring-gray-500',
-    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
-  };
-
-  const classes = `${baseClasses} ${variantClasses[variant]} ${className}`;
-
-  if (Component === 'span') {
-    return (
-      <span className={classes} {...(props as any)}>
-        {children}
-      </span>
-    );
-  }
-
+export function Button({ variant = "primary", className, children, as = "button", ...props }: ButtonProps) {
+  const Component = as;
   return (
-    <button
-      className={classes}
+    <Component
+      className={clsx(
+        "px-3 py-1.5 text-xs font-medium rounded transition-colors",
+        variant === "primary"
+          ? "bg-[var(--accent)] hover:bg-[#6b75ff] text-white"
+          : "bg-[var(--panel)] hover:bg-[#1a1f2e] text-zinc-200 border border-[var(--border)]",
+        className
+      )}
       {...props}
     >
       {children}
-    </button>
+    </Component>
   );
 }

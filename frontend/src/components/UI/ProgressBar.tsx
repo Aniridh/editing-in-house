@@ -1,24 +1,18 @@
+import React from "react";
+
 interface ProgressBarProps {
-  progress: number; // 0-100
+  progress: number;
   label?: string;
-  className?: string;
 }
 
-export function ProgressBar({ progress, label, className = '' }: ProgressBarProps) {
-  const clampedProgress = Math.max(0, Math.min(100, progress));
-
+export function ProgressBar({ progress, label }: ProgressBarProps) {
   return (
-    <div className={`w-full ${className}`}>
-      {label && (
-        <div className="flex justify-between text-sm text-gray-300 mb-1">
-          <span>{label}</span>
-          <span>{Math.round(clampedProgress)}%</span>
-        </div>
-      )}
-      <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+    <div className="space-y-1">
+      {label && <div className="text-xs text-zinc-400">{label}</div>}
+      <div className="h-2 bg-[var(--panel)] rounded-full overflow-hidden">
         <div
-          className="bg-blue-600 h-full transition-all duration-300 ease-out"
-          style={{ width: `${clampedProgress}%` }}
+          className="h-full bg-[var(--accent)] transition-all duration-300"
+          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
         />
       </div>
     </div>

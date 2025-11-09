@@ -1,32 +1,19 @@
-import { Group, Line } from 'react-konva';
-import { timeToPixels } from '../../utils/timeline';
+import React from "react";
+import { Line } from "react-konva";
 
 interface PlayheadProps {
-  playhead: number;
-  zoom: number;
+  x: number;
   height: number;
-  color?: string;
 }
 
-export function Playhead({ playhead, zoom, height, color = '#ff0000' }: PlayheadProps) {
-  const x = timeToPixels(playhead, zoom);
-
+export function Playhead({ x, height }: PlayheadProps) {
   return (
-    <Group>
-      <Line
-        points={[x, 0, x, height]}
-        stroke={color}
-        strokeWidth={2}
-        listening={false}
-        hitStrokeWidth={0}
-      />
-      <Line
-        points={[x - 5, 0, x, 10, x + 5, 0]}
-        fill={color}
-        closed
-        listening={false}
-        hitStrokeWidth={0}
-      />
-    </Group>
+    <Line
+      points={[x, 0, x, height]}
+      stroke="#ef4444"
+      strokeWidth={2}
+      listening={false}
+    />
   );
 }
+

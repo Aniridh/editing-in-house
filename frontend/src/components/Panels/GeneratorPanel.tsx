@@ -1,343 +1,244 @@
-import { useState, useEffect } from 'react';
-import { useEditorStore } from '../../store/editorStore';
-import { generateVideo, generateImage, generateVoiceover } from '../../api/generate';
-import { useSSE } from '../../hooks/useSSE';
-import { Button } from '../UI/Button';
-import { ProgressBar } from '../UI/ProgressBar';
-import { JobRow } from './JobRow';
-import { JobSSEManager } from './JobSSEManager';
-
-type TabType = 'video' | 'image' | 'voiceover';
+import React, { useState } from "react";
+import { generateVideo, generateImage, generateVoice, streamJob } from "../../api/generate";
+import { useEditorStore } from "../../store/editorStore";
+import { Button } from "../UI/Button";
+import { ProgressBar } from "../UI/ProgressBar";
+import type { Job } from "../../types";
 
 export function GeneratorPanel() {
-  const [activeTab, setActiveTab] = useState<TabType>('video');
-  const [videoPrompt, setVideoPrompt] = useState('');
+  const [activeTab, setActiveTab] = useState<"video" | "image" | "voice">("video");
+  const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
-  const [videoAspect, setVideoAspect] = useState('16:9');
-  const [imagePrompt, setImagePrompt] = useState('');
-  const [imageAspect, setImageAspect] = useState('16:9');
-  const [voiceText, setVoiceText] = useState('');
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [videoAspect, setVideoAspect] = useState("16:9");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageAspect, setImageAspect] = useState("16:9");
+  const [voiceText, setVoiceText] = useState("");
 
-  const demoMode = false; // TODO: Add demo mode toggle
-  const addAsset = useEditorStore((state) => state.addAsset);
+  const pushAsset = useEditorStore((state) => state.pushAsset);
   const updateJob = useEditorStore((state) => state.updateJob);
   const jobs = useEditorStore((state) => state.jobs);
-  const assets = useEditorStore((state) => state.assets);
-
-  // Use SSE for active job (for backward compatibility)
-  useSSE(activeJobId, demoMode);
-
-  const activeJob = activeJobId ? jobs.get(activeJobId) : null;
-  const allJobs = Array.from(jobs.values());
 
   const handleGenerateVideo = async () => {
-    if (!videoPrompt.trim()) return;
-
     try {
-      const result = await generateVideo(videoPrompt, videoDuration, videoAspect, demoMode);
-      setActiveJobId(result.jobId);
-
-      // Create job entry
-      updateJob({
-        id: result.jobId,
-        status: result.url ? 'complete' : 'generating',
-        progress: result.url ? 100 : 0,
-        url: result.url,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+      const res = await generateVideo({
+        prompt: videoPrompt,
+        duration_sec: Math.min(5, videoDuration),
+        aspect: videoAspect,
       });
-
-      // If URL is immediate, add asset
-      if (result.url) {
-        addAsset({
-          id: `asset-${Date.now()}`,
-          url: result.url,
-          type: 'video',
-          duration: videoDuration,
-          metadata: { aspectRatio: videoAspect },
-          createdAt: Date.now(),
+      if ("jobId" in res) {
+        const job: Job = { id: res.jobId, kind: "video", status: "queued" };
+        updateJob(job);
+        streamJob(res.jobId, {
+          onEvent: (event, data) => {
+            const currentJob = useEditorStore.getState().jobs[res.jobId] || job;
+            if (event === "status") {
+              updateJob({ ...currentJob, status: data.status });
+            } else if (event === "progress") {
+              updateJob({ ...currentJob, progress: data.progress });
+            } else if (event === "complete") {
+              updateJob({ ...currentJob, status: "complete", url: data.url });
+              pushAsset({ id: data.url, kind: "video", url: data.url });
+            } else if (event === "error") {
+              updateJob({ ...currentJob, status: "error", error: data.message });
+            }
+          },
+          onError: (err) => {
+            console.error("Job stream error:", err);
+            const currentJob = useEditorStore.getState().jobs[res.jobId] || job;
+            updateJob({ ...currentJob, status: "error", error: err.message });
+          },
         });
       }
-    } catch (error) {
-      console.error('Generate video error:', error);
+    } catch (err) {
+      console.error("Generate error:", err);
     }
   };
 
   const handleGenerateImage = async () => {
-    if (!imagePrompt.trim()) return;
-
     try {
-      const result = await generateImage(imagePrompt, imageAspect, demoMode);
-      setActiveJobId(result.jobId);
-
-      updateJob({
-        id: result.jobId,
-        status: result.url ? 'complete' : 'generating',
-        progress: result.url ? 100 : 0,
-        url: result.url,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-
-      if (result.url) {
-        addAsset({
-          id: `asset-${Date.now()}`,
-          url: result.url,
-          type: 'image',
-          metadata: { aspectRatio: imageAspect },
-          createdAt: Date.now(),
+      const res = await generateImage({ prompt: imagePrompt, aspect: imageAspect });
+      if ("url" in res) {
+        pushAsset({ id: res.url, kind: "image", url: res.url });
+      } else if ("jobId" in res) {
+        const job: Job = { id: res.jobId, kind: "image", status: "queued" };
+        updateJob(job);
+        streamJob(res.jobId, {
+          onEvent: (event, data) => {
+            const currentJob = useEditorStore.getState().jobs[res.jobId] || job;
+            if (event === "complete") {
+              updateJob({ ...currentJob, status: "complete", url: data.url });
+              pushAsset({ id: data.url, kind: "image", url: data.url });
+            } else if (event === "error") {
+              updateJob({ ...currentJob, status: "error", error: data.message });
+            }
+          },
         });
       }
-    } catch (error) {
-      console.error('Generate image error:', error);
+    } catch (err) {
+      console.error("Generate error:", err);
     }
   };
 
-  const handleGenerateVoiceover = async () => {
-    if (!voiceText.trim()) return;
-
+  const handleGenerateVoice = async () => {
     try {
-      const result = await generateVoiceover(voiceText, undefined, demoMode);
-      setActiveJobId(result.jobId);
-
-      updateJob({
-        id: result.jobId,
-        status: result.url ? 'complete' : 'generating',
-        progress: result.url ? 100 : 0,
-        url: result.url,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-
-      if (result.url) {
-        addAsset({
-          id: `asset-${Date.now()}`,
-          url: result.url,
-          type: 'voiceover',
-          createdAt: Date.now(),
+      const res = await generateVoice({ text: voiceText });
+      if ("url" in res) {
+        pushAsset({ id: res.url, kind: "audio", url: res.url });
+      } else if ("jobId" in res) {
+        const job: Job = { id: res.jobId, kind: "voice", status: "queued" };
+        updateJob(job);
+        streamJob(res.jobId, {
+          onEvent: (event, data) => {
+            const currentJob = useEditorStore.getState().jobs[res.jobId] || job;
+            if (event === "complete") {
+              updateJob({ ...currentJob, status: "complete", url: data.url });
+              pushAsset({ id: data.url, kind: "audio", url: data.url });
+            } else if (event === "error") {
+              updateJob({ ...currentJob, status: "error", error: data.message });
+            }
+          },
         });
       }
-    } catch (error) {
-      console.error('Generate voiceover error:', error);
+    } catch (err) {
+      console.error("Generate error:", err);
     }
   };
 
-  // Watch for job completion and add asset
-  useEffect(() => {
-    if (activeJob && activeJob.status === 'complete' && activeJob.url) {
-      const assets = useEditorStore.getState().assets;
-      const assetExists = Array.from(assets.values()).some((a) => a.url === activeJob.url);
-      if (!assetExists && activeJob.url) {
-        // Determine asset type from active tab
-        const assetType = activeTab === 'video' ? 'video' : activeTab === 'image' ? 'image' : 'voiceover';
-        addAsset({
-          id: `asset-${activeJob.id}`,
-          url: activeJob.url,
-          type: assetType,
-          createdAt: Date.now(),
-        });
-      }
-    }
-  }, [activeJob, addAsset, activeTab]);
+  const allJobs = Object.values(jobs);
+  const activeJobs = allJobs.filter((j) => j.status === "queued" || j.status === "generating");
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 border-r border-gray-700">
-      {/* SSE Manager for all active jobs */}
-      <JobSSEManager demoMode={demoMode} />
-      
-      <div className="p-4 border-b border-gray-700">
-        <h2 className="text-lg font-semibold text-white">Generator</h2>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-gray-700">
-        {(['video', 'image', 'voiceover'] as TabType[]).map((tab) => (
+    <div className="h-full flex flex-col bg-[var(--panel)]">
+      <div className="flex border-b border-[var(--border)]">
+        {(["video", "image", "voice"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex-1 px-4 py-2 text-xs font-medium transition-colors border-b-2 ${
               activeTab === tab
-                ? 'bg-gray-800 text-white border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                ? "text-blue-400 border-blue-400"
+                : "text-zinc-500 border-transparent hover:text-zinc-300"
             }`}
-            aria-label={`${tab} tab`}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {/* Video Tab */}
-        {activeTab === 'video' && (
-          <div className="space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {activeTab === "video" && (
+          <>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Prompt
-              </label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Prompt</label>
               <textarea
                 value={videoPrompt}
                 onChange={(e) => setVideoPrompt(e.target.value)}
                 placeholder="Describe the video you want to generate..."
-                className="w-full p-3 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full p-3 bg-[var(--bg)] text-zinc-200 rounded-lg border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none placeholder:text-zinc-500 text-sm"
                 rows={3}
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Duration (seconds)
-              </label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Duration (seconds, max 5)</label>
               <input
                 type="number"
                 min="1"
-                max="20"
+                max="5"
                 value={videoDuration}
                 onChange={(e) => setVideoDuration(parseInt(e.target.value, 10))}
-                className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 bg-[var(--bg)] text-zinc-200 rounded-lg border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] text-sm"
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Aspect Ratio
-              </label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Aspect Ratio</label>
               <select
                 value={videoAspect}
                 onChange={(e) => setVideoAspect(e.target.value)}
-                className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 bg-[var(--bg)] text-zinc-200 rounded-lg border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] text-sm"
               >
                 <option value="16:9">16:9 (Landscape)</option>
                 <option value="9:16">9:16 (Portrait)</option>
                 <option value="1:1">1:1 (Square)</option>
               </select>
             </div>
-
-            {activeJob && (
-              <div>
-                <ProgressBar
-                  progress={activeJob.progress || 0}
-                  label="Generating video..."
-                />
-                {activeJob.status === 'error' && (
-                  <p className="text-red-400 text-sm mt-2">{activeJob.error}</p>
-                )}
-              </div>
-            )}
-
-            <Button onClick={handleGenerateVideo} disabled={!videoPrompt.trim() || (activeJob?.status === 'generating')}>
+            <Button onClick={handleGenerateVideo} disabled={!videoPrompt.trim()}>
               Generate Video
             </Button>
-          </div>
+          </>
         )}
-
-        {/* Image Tab */}
-        {activeTab === 'image' && (
-          <div className="space-y-4">
+        {activeTab === "image" && (
+          <>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Prompt
-              </label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Prompt</label>
               <textarea
                 value={imagePrompt}
                 onChange={(e) => setImagePrompt(e.target.value)}
                 placeholder="Describe the image you want to generate..."
-                className="w-full p-3 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full p-3 bg-[var(--bg)] text-zinc-200 rounded-lg border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none placeholder:text-zinc-500 text-sm"
                 rows={3}
               />
             </div>
-
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Aspect Ratio
-              </label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Aspect Ratio</label>
               <select
                 value={imageAspect}
                 onChange={(e) => setImageAspect(e.target.value)}
-                className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 bg-[var(--bg)] text-zinc-200 rounded-lg border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] text-sm"
               >
                 <option value="16:9">16:9 (Landscape)</option>
                 <option value="9:16">9:16 (Portrait)</option>
                 <option value="1:1">1:1 (Square)</option>
               </select>
             </div>
-
-            {activeJob && (
-              <div>
-                <ProgressBar
-                  progress={activeJob.progress || 0}
-                  label="Generating image..."
-                />
-                {activeJob.status === 'error' && (
-                  <p className="text-red-400 text-sm mt-2">{activeJob.error}</p>
-                )}
-              </div>
-            )}
-
-            <Button onClick={handleGenerateImage} disabled={!imagePrompt.trim() || (activeJob?.status === 'generating')}>
+            <Button onClick={handleGenerateImage} disabled={!imagePrompt.trim()}>
               Generate Image
             </Button>
-          </div>
+          </>
         )}
-
-        {/* Voiceover Tab */}
-        {activeTab === 'voiceover' && (
-          <div className="space-y-4">
+        {activeTab === "voice" && (
+          <>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Text
-              </label>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">Text</label>
               <textarea
                 value={voiceText}
                 onChange={(e) => setVoiceText(e.target.value)}
                 placeholder="Enter the text to convert to speech..."
-                className="w-full p-3 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className="w-full p-3 bg-[var(--bg)] text-zinc-200 rounded-lg border border-[var(--border)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none placeholder:text-zinc-500 text-sm"
                 rows={5}
               />
             </div>
-
-            {activeJob && (
-              <div>
-                <ProgressBar
-                  progress={activeJob.progress || 0}
-                  label="Generating voiceover..."
-                />
-                {activeJob.status === 'error' && (
-                  <p className="text-red-400 text-sm mt-2">{activeJob.error}</p>
-                )}
-              </div>
-            )}
-
-            <Button onClick={handleGenerateVoiceover} disabled={!voiceText.trim() || (activeJob?.status === 'generating')}>
+            <Button onClick={handleGenerateVoice} disabled={!voiceText.trim()}>
               Generate Voiceover
             </Button>
-          </div>
+          </>
         )}
-
-        {/* Jobs List */}
         {allJobs.length > 0 && (
-          <div className="mt-6 border-t border-gray-700 pt-4">
-            <h3 className="text-sm font-semibold text-gray-300 mb-3">Recent Jobs</h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {allJobs
-                .sort((a, b) => b.createdAt - a.createdAt)
-                .map((job) => (
-                  <JobRow
-                    key={job.id}
-                    job={job}
-                    onRevealInAssets={(jobId) => {
-                      const job = jobs.get(jobId);
-                      if (job?.url) {
-                        const asset = Array.from(assets.values()).find((a) => a.url === job.url);
-                        if (asset) {
-                          // Could scroll to asset bin or highlight
-                          console.log('Reveal asset:', asset.id);
-                        }
-                      }
-                    }}
-                  />
-                ))}
+          <div className="mt-6 border-t border-[var(--border)] pt-4">
+            <h3 className="text-xs font-semibold text-zinc-300 mb-3">Jobs</h3>
+            <div className="space-y-2">
+              {allJobs.map((job) => (
+                <div key={job.id} className="p-2 bg-[var(--bg)] rounded border border-[var(--border)]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-zinc-300">{job.kind}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      job.status === "complete" ? "bg-green-600 text-white" :
+                      job.status === "error" ? "bg-red-600 text-white" :
+                      job.status === "generating" ? "bg-blue-600 text-white" :
+                      "bg-zinc-600 text-white"
+                    }`}>
+                      {job.status}
+                    </span>
+                  </div>
+                  {(job.status === "queued" || job.status === "generating") && (
+                    <ProgressBar progress={job.progress || 0} label={`Generating ${job.kind}...`} />
+                  )}
+                  {job.status === "error" && job.error && (
+                    <p className="text-xs text-red-400 mt-1">{job.error}</p>
+                  )}
+                  {job.status === "complete" && job.url && (
+                    <p className="text-xs text-green-400 mt-1">Complete</p>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

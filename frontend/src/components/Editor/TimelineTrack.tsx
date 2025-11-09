@@ -1,137 +1,83 @@
-import { Layer, Rect } from 'react-konva';
-import type { Track, Clip } from '../../types';
-import { TimelineClip } from './TimelineClip';
-import { TransitionHandle } from './TransitionHandle';
-import { useEditorStore } from '../../store/editorStore';
-import { timeToPixels } from '../../utils/timeline';
-import { useMemo } from 'react';
+import React from "react";
+import { Layer, Rect, Text } from "react-konva";
+import { TimelineClip } from "./TimelineClip";
+import type { Clip, Asset } from "../../types";
 
 interface TimelineTrackProps {
-  track: Track;
+  trackId: string;
+  trackType: "video" | "audio" | "overlay";
+  clips: Clip[];
+  assetsById: Record<string, Asset>;
+  y: number;
+  height: number;
   zoom: number;
-  trackHeight: number;
   visibleStart: number;
   visibleEnd: number;
-  onClipSelect: (clipId: string, multi: boolean) => void;
-  onClipDragEnd: (clipId: string, newStart: number, useRipple?: boolean) => void;
-  onClipDragMove?: (clipId: string, newStart: number, snapResult?: { snappedTime: number; snapTarget: string | null }) => void;
-  onClipTrim: (clipId: string, side: 'left' | 'right', newPoint: number, useRipple?: boolean) => void;
+  onClipSelect: (clipId: string) => void;
+  onClipDragEnd: (clipId: string, newStart: number) => void;
+}
+
+const snap = (t: number) => Math.round(t * 10) / 10;
+
+function timeToPixels(time: number, zoom: number): number {
+  return time * zoom;
+}
+
+function pixelsToTime(pixels: number, zoom: number): number {
+  return pixels / zoom;
 }
 
 export function TimelineTrack({
-  track,
+  trackId,
+  trackType,
+  clips,
+  assetsById,
+  y,
+  height,
   zoom,
-  trackHeight,
   visibleStart,
   visibleEnd,
   onClipSelect,
   onClipDragEnd,
-  onClipDragMove,
-  onClipTrim,
 }: TimelineTrackProps) {
-  const selection = useEditorStore((state) => state.selection);
-  const assets = useEditorStore((state) => state.assets);
-  const playhead = useEditorStore((state) => state.playhead);
-  const allTracks = useEditorStore((state) => state.tracks);
-  const allClips = allTracks.flatMap((t) => t.clips);
-  const setTransition = useEditorStore((state) => state.setTransition);
-  const removeTransition = useEditorStore((state) => state.removeTransition);
-
-  // Memoize visible clips calculation
-  const visibleClips = useMemo(() => {
-    return track.clips.filter(
-      (clip) => clip.end >= visibleStart && clip.start <= visibleEnd
-    );
-  }, [track.clips, visibleStart, visibleEnd]);
-
-  // Find adjacent clips (clips that touch each other)
-  const adjacentPairs: Array<{ from: Clip; to: Clip }> = [];
-  const sortedClips = [...track.clips].sort((a, b) => a.start - b.start);
-  for (let i = 0; i < sortedClips.length - 1; i++) {
-    const current = sortedClips[i];
-    const next = sortedClips[i + 1];
-    // Clips are adjacent if they're on the same track and end/start are very close (within 0.01s)
-    if (current.trackId === next.trackId && Math.abs(current.end - next.start) < 0.01) {
-      adjacentPairs.push({ from: current, to: next });
-    }
-  }
-
-  const handleTransitionDurationChange = (fromClipId: string, newDuration: number) => {
-    const fromClip = track.clips.find((c) => c.id === fromClipId);
-    if (fromClip?.transitionToClipId) {
-      setTransition(fromClipId, fromClip.transitionToClipId, newDuration);
-    }
-  };
+  const visibleClips = clips.filter(
+    (c) => c.track === trackType && c.end >= visibleStart && c.start <= visibleEnd
+  );
 
   return (
     <Layer>
-      {/* Track background */}
-      <Rect
-        width={10000} // Large enough for scrolling
-        height={trackHeight}
-        fill={track.type === 'video' ? '#1f2937' : '#111827'}
+      <Rect x={0} y={y} width={10000} height={height} fill="#0f1115" listening={false} />
+      <Text
+        x={4}
+        y={y + height / 2 - 6}
+        text={trackType === "video" ? "V1" : trackType === "overlay" ? "VO" : "A1"}
+        fontSize={10}
+        fill="#a1a1aa"
         listening={false}
-        perfectDrawEnabled={false}
       />
-
-      {/* Clips */}
       {visibleClips.map((clip) => {
-        const asset = assets.get(clip.assetId);
+        const clipStart = Math.max(clip.start, visibleStart);
+        const clipEnd = Math.min(clip.end, visibleEnd);
+        const clipX = timeToPixels(clipStart - visibleStart, zoom);
+        const clipWidth = timeToPixels(clipEnd - clipStart, zoom);
         return (
           <TimelineClip
             key={clip.id}
             clip={clip}
-            zoom={zoom}
-            trackHeight={trackHeight}
-            isSelected={selection.includes(clip.id)}
-            onSelect={onClipSelect}
-            onDragEnd={onClipDragEnd}
-            onDragMove={onClipDragMove}
-            onTrim={onClipTrim}
-            assetName={asset?.url.split('/').pop()?.split('?')[0]}
-            asset={asset}
-            playhead={playhead}
-            allClips={allClips}
+            asset={clip.assetId ? assetsById[clip.assetId] : undefined}
+            x={clipX}
+            y={y + 2}
+            width={Math.max(20, clipWidth)}
+            height={height - 4}
+            isSelected={false}
+            onSelect={() => onClipSelect(clip.id)}
+            onDragEnd={(newX) => {
+              const newStart = visibleStart + pixelsToTime(newX, zoom);
+              onClipDragEnd(clip.id, snap(newStart));
+            }}
           />
         );
       })}
-
-      {/* Transition handles */}
-      {adjacentPairs
-        .filter((pair) => {
-          const fromVisible = pair.from.end >= visibleStart && pair.from.start <= visibleEnd;
-          const toVisible = pair.to.end >= visibleStart && pair.to.start <= visibleEnd;
-          return fromVisible || toVisible;
-        })
-        .map((pair) => {
-          const transitionDuration = pair.from.transitionDuration || 0.5;
-          const transitionWidth = timeToPixels(transitionDuration, zoom);
-          const transitionX = timeToPixels(pair.from.end - transitionDuration, zoom);
-          
-          // Only show if transition exists or clips are flush
-          if (pair.from.transitionType === 'crossfade' || Math.abs(pair.from.end - pair.to.start) < 0.01) {
-            return (
-              <TransitionHandle
-                key={`transition-${pair.from.id}-${pair.to.id}`}
-                x={transitionX}
-                y={2}
-                width={transitionWidth}
-                height={trackHeight - 4}
-                duration={transitionDuration}
-                zoom={zoom}
-                onDrag={(newDuration) => {
-                  if (pair.from.transitionType === 'crossfade') {
-                    handleTransitionDurationChange(pair.from.id, newDuration);
-                  } else {
-                    // Auto-create transition when dragging handle
-                    setTransition(pair.from.id, pair.to.id, newDuration);
-                  }
-                }}
-              />
-            );
-          }
-          return null;
-        })}
     </Layer>
   );
 }

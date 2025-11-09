@@ -46,38 +46,38 @@ export const demoProvider: Provider = {
       const jobId = createJob('queued', input.kind);
       logger.info({ jobId, prompt: input.prompt }, 'Demo video generation started');
 
-      // Start simulation in background
-      simulateProgress(jobId, 3000, (url) => {
-        logger.info({ jobId, url }, 'Demo video generation completed');
-      }).catch((error) => {
+  // Start simulation in background
+  simulateProgress(jobId, 3000, (url) => {
+    logger.info({ jobId, url }, 'Demo video generation completed');
+  }).catch((error) => {
         logger.error(
           { jobId, error: error instanceof Error ? error.message : String(error) },
           'Demo video generation failed'
         );
-        updateJob(jobId, { status: 'error', error: 'Generation failed' });
-      });
+    updateJob(jobId, { status: 'error', error: 'Generation failed' });
+  });
 
-      return { jobId };
-    }
+  return { jobId };
+}
 
     if (input.kind === 'image') {
-      // For demo, return URL immediately (no async job needed)
+  // For demo, return URL immediately (no async job needed)
       // Select a demo image based on prompt hash for consistency
       const promptHash = input.prompt ? input.prompt.length : 0;
       const imageIndex = promptHash % DEMO_IMAGES.length;
       const url = DEMO_IMAGES[imageIndex];
-
+  
       logger.info({ url, prompt: input.prompt }, 'Demo image generation completed');
-      return { url };
-    }
+  return { url };
+}
 
     if (input.kind === 'voice') {
-      // For demo, return URL immediately (no async job needed)
+  // For demo, return URL immediately (no async job needed)
       const url = DEMO_VOICE;
-
+  
       logger.info({ url, text: input.text }, 'Demo voice generation completed');
-      return { url };
-    }
+  return { url };
+}
 
     throw new Error(`Unsupported generation kind: ${input.kind}`);
   },

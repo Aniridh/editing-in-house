@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f1115;     /* app bg */
+  --surface: #151923;/* chrome */
+  --panel: #171b26;  /* panels */
+  --border: #232838; /* hairline */
+  --text: #e5e7eb;   /* zinc-200 */
+  --muted: #a1a1aa;  /* zinc-400 */
+  --accent: #7c87ff; /* brand */
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+

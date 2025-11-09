@@ -90,5 +90,5 @@ export function setupMiddleware(app: Express) {
   // Request timeout (30s for generation endpoints, applied in routes)
 }
 
-export { interpretRateLimit, generateRateLimit };
+export { interpretRateLimit, generateRateLimit, errorHandler };
 
